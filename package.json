@@ -1,0 +1,29 @@
+{
+  "name": "warmweight-h5",
+  "private": true,
+  "version": "1.0.0",
+  "description": "暖轻 · 个人体重管理 H5 —— 本地优先 + 云端同步的减重计划 / BMI / 拍照对比 / 食物 GI / 运动消耗工具",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "~5.5.4",
+    "vite": "^5.4.7"
+  }
+}
