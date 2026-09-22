@@ -92,3 +92,53 @@ http.createServer((req, res) => {
 1. 认证：`/api/login`、`/api/register` 由服务端签发 JWT；前端 `hashPassword` 逻辑整体替换为 token 流程（store 接口不变）
 2. 照片：快照中的 dataURL 改传对象存储 URL，避免大 payload
 3. 限流：PUT 加节流（建议 ≥30s/次），冲突场景客户端已用时间戳合并兜底
+
+---
+
+## 接入清单：想把账号和数据存到自己的云端，需要提供什么？
+
+### 方案 A：最省事 —— 免费后端平台（推荐，零服务器）
+
+以 **Supabase**（免费额度足够个人用）为例，5 分钟接入：
+
+1. **注册** [supabase.com](https://supabase.com)，新建一个 Project
+2. **建表**：SQL Editor 里执行：
+
+```sql
+create table sync_snapshots (
+  user_id   text primary key,
+  payload   jsonb not null,          -- 整包快照（user/plan/weights/photos）
+  saved_at  timestamptz not null default now()
+);
+```
+
+3. **部署两个函数**（Supabase Edge Functions 或任意 Serverless）：
+
+| 端点 | 逻辑 |
+|---|---|
+| `POST /api/register` | 校验邮箱唯一 → 存 `auth_users` 表（密码用 bcrypt 哈希，不要 sha256）→ 返回 JWT |
+| `POST /api/login` | 校验密码 → 返回 JWT |
+| `GET /api/sync/:userId` | 校验 JWT → 返回 `payload` |
+| `PUT /api/sync/:userId` | 校验 JWT → upsert 快照 |
+
+4. **前端只改 2 个文件**（接口签名已对齐，无需动业务代码）：
+   - `src/lib/sync.ts`：`CLOUD_API_BASE = 'https://你的函数域名'`
+   - `src/store/useApp.ts`：把 `register/login` 里的本地哈希逻辑换成调用后端接口（有现成注释标注）
+
+### 方案 B：已有服务器 / 云函数
+
+只需实现 `docs/API.md` 上方的 4 个端点（有 Node 零依赖参考实现，复制就能跑），其余同上。
+
+### 你需要提供/准备的东西（总结）
+
+| 项 | 说明 |
+|---|---|
+| 一个后端运行环境 | Supabase / Vercel Functions / 云服务器均可 |
+| 一个数据库表 | 就上面一张 `sync_snapshots`（认证另加用户表）|
+| 一个域名或函数 URL | 填进 `CLOUD_API_BASE` |
+| （生产必须）HTTPS | 浏览器安全要求 |
+
+### 数据归属说明
+
+- 快照是**整包 JSON**（结构见本文件上方），换后端平台只是搬这张表，无锁定
+- 照片当前以压缩 dataURL 存在快照里（单张约 100~200KB）；数据量大后建议改传对象存储（Supabase Storage / OSS），快照里只存 URL
