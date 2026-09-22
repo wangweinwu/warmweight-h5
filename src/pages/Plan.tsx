@@ -18,12 +18,16 @@ export default function Plan() {
   const [unit, setUnit] = useState<'week' | 'month'>(plan?.unit ?? 'week')
   const [duration, setDuration] = useState(plan?.duration ?? 8)
   const [startDate, setStartDate] = useState(plan?.startDate ?? todayStr())
+  // 起始体重：默认取最近一次记录；可手动修改（也同步写入当日体重记录）
+  const [startDraft, setStartDraft] = useState<string>('')
 
   if (!me) return <Navigate to="/auth" replace />
 
   const sorted = [...weights].sort((a, b) => (a.date < b.date ? -1 : 1))
   const latest = sorted[sorted.length - 1]
-  const startWeight = plan?.startWeight ?? latest?.weight ?? null
+  const recordedStart = plan?.startWeight ?? latest?.weight ?? null
+  const manualStart = startDraft.trim() !== '' && isFinite(Number(startDraft)) ? Math.round(Number(startDraft) * 10) / 10 : null
+  const startWeight = manualStart ?? recordedStart
 
   const totalDays = unit === 'week' ? duration * 7 : duration * 30
   const endDate = addDays(startDate, totalDays)
@@ -32,11 +36,18 @@ export default function Plan() {
   const weeklyTarget = dailyTarget != null ? round1(dailyTarget * 7) : null
   const tooFast = dailyTarget != null && dailyTarget > 0.35
 
-  const canSave = startWeight != null && goalWeight > 30 && goalWeight < (startWeight ?? 999) && duration >= 1
+  const startInvalid = startDraft !== '' && (manualStart == null || manualStart < 30 || manualStart > 300)
+  const canSave =
+    !startInvalid && startWeight != null && startWeight >= 30 && startWeight <= 300 && goalWeight > 30 && goalWeight < startWeight && duration >= 1
 
   const submit = () => {
     if (!canSave || startWeight == null) return
     savePlan({ startWeight, goalWeight, startDate, unit, duration })
+    // 手动填写的起始体重同步为当日体重记录，保证曲线/计划口径一致
+    if (manualStart != null && (!latest || latest.date !== todayStr() || latest.weight !== manualStart)) {
+      void useApp.getState().upsertWeight(todayStr(), manualStart)
+    }
+    setStartDraft('')
     setEditing(false)
     useApp.getState().toast('计划已保存，每天加油', 'ok')
   }
@@ -126,26 +137,63 @@ export default function Plan() {
         {plan ? '调整计划' : '设定减重计划'}
       </div>
 
-      {!startWeight ? (
-        <div className="card card-pad" style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-          <IconInfo width={20} height={20} style={{ color: 'var(--c-caramel)', flexShrink: 0 }} />
-          <div style={{ fontSize: 13, color: 'var(--c-ink-2)' }}>
-            还没有体重记录，请先在首页记录一次当前体重，作为计划起点。
-          </div>
+      {/* 第 0 步：起始体重（可修改） */}
+      <div className="card card-pad" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span className="step-no">0</span>
+          <b style={{ fontSize: 15 }}>起始体重</b>
+          <span style={{ fontSize: 12, color: 'var(--c-ink-3)', marginLeft: 'auto' }}>
+            {recordedStart != null ? '来自最近记录，可修改' : '手动填写'}
+          </span>
         </div>
-      ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+          <input
+            className="field-input num"
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min={30}
+            max={300}
+            value={startDraft !== '' ? startDraft : recordedStart != null ? String(recordedStart) : ''}
+            onChange={(e) => setStartDraft(e.target.value)}
+            placeholder="如 72.5"
+            style={{ flex: 1, fontSize: 20, fontWeight: 700, textAlign: 'center' }}
+            aria-label="起始体重"
+          />
+          <span style={{ fontSize: 13, color: 'var(--c-ink-2)', flexShrink: 0 }}>kg</span>
+        </div>
+        <div className="field-hint" style={{ marginTop: 6 }}>
+          建议用晨起空腹体重；修改后将同步为当日体重记录
+          {startDraft !== '' && (manualStart == null || manualStart < 30 || manualStart > 300) ? <span className="field-error">（请输入 30~300 之间的数值）</span> : null}
+        </div>
+      </div>
 
       {/* 第 1 步：目标体重 */}
       <div className="card card-pad" style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <span className="step-no">1</span>
           <b style={{ fontSize: 15 }}>目标体重</b>
-          {startWeight != null ? <span style={{ fontSize: 12, color: 'var(--c-ink-3)', marginLeft: 'auto' }}>当前 {startWeight} kg</span> : null}
+          {startWeight != null ? <span style={{ fontSize: 12, color: 'var(--c-ink-3)', marginLeft: 'auto' }}>起始 {startWeight} kg</span> : null}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18 }}>
           <Stepper value={goalWeight} onChange={setGoalWeight} step={0.5} min={30} max={200} unit="kg" />
-          <div className="num" style={{ fontSize: 30, fontWeight: 800, minWidth: 90, textAlign: 'center' }}>
-            {goalWeight}<i style={{ fontSize: 13, fontStyle: 'normal', color: 'var(--c-ink-3)' }}> kg</i>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            <input
+              className="num"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={30}
+              max={200}
+              value={goalWeight}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                if (isFinite(n) && n >= 30 && n <= 200) setGoalWeight(Math.round(n * 10) / 10)
+              }}
+              style={{ width: 86, fontSize: 30, fontWeight: 800, textAlign: 'center', border: 'none', borderBottom: '2px dashed var(--c-line-strong)', background: 'transparent', color: 'var(--c-ink)', outline: 'none', fontFamily: 'var(--font-num)' }}
+              aria-label="目标体重直接输入"
+            />
+            <i style={{ fontSize: 13, fontStyle: 'normal', color: 'var(--c-ink-3)' }}>kg</i>
           </div>
         </div>
         {toLose != null ? (

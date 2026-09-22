@@ -314,6 +314,27 @@ select.field-input {
   font-weight: 700;
   font-size: 15px;
 }
+.stepper-input {
+  width: 74px;
+  min-width: 0;
+  border: none;
+  border-bottom: 2px solid var(--c-coral);
+  background: transparent;
+  text-align: center;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--c-ink);
+  padding: 2px 0;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.stepper-input::-webkit-outer-spin-button,
+.stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* 标签 chip */
 .chip {

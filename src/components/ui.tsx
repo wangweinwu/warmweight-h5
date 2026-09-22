@@ -1,4 +1,5 @@
 /** 通用 UI 小组件 */
+import { useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 import { IconBack, IconClose } from './icons'
 
@@ -132,19 +133,57 @@ export function Segmented<T extends string>({ value, onChange, options, style }:
   )
 }
 
-export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, unit }: {
+export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, unit, editable = true }: {
   value: number
   onChange: (v: number) => void
   step?: number
   min?: number
   max?: number
   unit?: string
+  /** 中间数值可点击直接输入（默认开启） */
+  editable?: boolean
 }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
   const fmt = (n: number) => (step < 1 ? n.toFixed(1) : String(Math.round(n)))
+
+  const commit = () => {
+    const n = Number(draft)
+    if (draft.trim() !== '' && isFinite(n)) {
+      const clamped = Math.min(max, Math.max(min, Math.round(n * 10) / 10))
+      onChange(clamped)
+    }
+    setEditing(false)
+  }
+
   return (
     <div className="stepper">
       <button onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))} disabled={value <= min} aria-label="减少">−</button>
-      <span>{fmt(value)}{unit ? <i style={{ fontStyle: 'normal', fontSize: 12, color: 'var(--c-ink-3)' }}> {unit}</i> : null}</span>
+      {editing ? (
+        <input
+          className="stepper-input num"
+          type="number"
+          inputMode="decimal"
+          step="any"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          aria-label="输入数值"
+        />
+      ) : (
+        <span
+          onClick={editable ? () => { setDraft(String(value)); setEditing(true) } : undefined}
+          style={editable ? { cursor: 'text', borderBottom: '1px dashed var(--c-line-strong)' } : undefined}
+          title={editable ? '点击直接输入' : undefined}
+        >
+          {fmt(value)}{unit ? <i style={{ fontStyle: 'normal', fontSize: 12, color: 'var(--c-ink-3)' }}> {unit}</i> : null}
+        </span>
+      )}
       <button onClick={() => onChange(Math.min(max, +(value + step).toFixed(2)))} disabled={value >= max} aria-label="增加">+</button>
     </div>
   )
