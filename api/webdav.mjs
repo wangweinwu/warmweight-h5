@@ -1,15 +1,12 @@
 /**
- * WebDAV 代理函数（Vercel Serverless · .cjs 适配 package.json "type":"module"）
+ * WebDAV 代理函数（Vercel Serverless · ESM）
  * 作用：绕过浏览器跨域限制，把 WebDAV 请求转发到用户配置的服务器
  * 请求：POST /api/webdav，头 x-webdav-url / x-webdav-auth / x-webdav-method / x-webdav-depth，body 为原始请求体
  * 安全：仅允许 http(s) 目标与 WebDAV 常用方法；可用环境变量 WEBDAV_PROXY_ORIGIN_ALLOWLIST 限制转发目标主机
  */
-const https = require('https')
-const http = require('http')
-
 const ALLOW_METHODS = ['GET', 'PUT', 'MKCOL', 'PROPFIND', 'DELETE', 'HEAD', 'OPTIONS']
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // CORS：允许任意来源使用本代理（凭据由请求方自带，代理不存储）
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -56,7 +53,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  const mod = target.toLowerCase().startsWith('https') ? https : http
+  const mod = target.toLowerCase().startsWith('https') ? (await import('https')).default : (await import('http')).default
   await new Promise((resolve) => {
     let settled = false
     const done = () => {
