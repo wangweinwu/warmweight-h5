@@ -18,16 +18,33 @@ export default function Plan() {
   const [unit, setUnit] = useState<'week' | 'month'>(plan?.unit ?? 'week')
   const [duration, setDuration] = useState(plan?.duration ?? 8)
   const [startDate, setStartDate] = useState(plan?.startDate ?? todayStr())
-  // 起始体重：默认取最近一次记录；可手动修改（也同步写入当日体重记录）
-  const [startDraft, setStartDraft] = useState<string>('')
 
   if (!me) return <Navigate to="/auth" replace />
 
   const sorted = [...weights].sort((a, b) => (a.date < b.date ? -1 : 1))
   const latest = sorted[sorted.length - 1]
   const recordedStart = plan?.startWeight ?? latest?.weight ?? null
+  // 起始体重：纯草稿输入（初始=最近记录），输入过程不拦截，删除后为空即待填写
+  const [startDraft, setStartDraft] = useState(recordedStart != null ? String(recordedStart) : '')
   const manualStart = startDraft.trim() !== '' && isFinite(Number(startDraft)) ? Math.round(Number(startDraft) * 10) / 10 : null
-  const startWeight = manualStart ?? recordedStart
+  const startWeight = manualStart
+  // 目标体重：草稿输入，失焦/回车提交
+  const [goalDraft, setGoalDraft] = useState('')
+
+  const commitGoalDraft = () => {
+    const n = Number(goalDraft)
+    if (goalDraft.trim() !== '' && isFinite(n)) {
+      setGoalWeight(Math.min(200, Math.max(30, Math.round(n * 10) / 10)))
+    }
+    setGoalDraft('')
+  }
+
+  /** 进入编辑态：草稿重置为当前记录值 */
+  const openEdit = () => {
+    setStartDraft(recordedStart != null ? String(recordedStart) : '')
+    setGoalDraft('')
+    setEditing(true)
+  }
 
   const totalDays = unit === 'week' ? duration * 7 : duration * 30
   const endDate = addDays(startDate, totalDays)
@@ -98,7 +115,7 @@ export default function Plan() {
         </div>
 
         <div className="cell-group" style={{ marginTop: 14 }}>
-          <div className="cell" onClick={() => setEditing(true)}>
+          <div className="cell" onClick={openEdit}>
             <div className="cell-body">
               <div className="cell-title">调整计划</div>
               <div className="cell-desc">修改目标体重或周期，重新计算每日目标</div>
@@ -152,10 +169,12 @@ export default function Plan() {
             type="number"
             inputMode="decimal"
             step="0.1"
-            min={30}
-            max={300}
-            value={startDraft !== '' ? startDraft : recordedStart != null ? String(recordedStart) : ''}
+            value={startDraft}
             onChange={(e) => setStartDraft(e.target.value)}
+            onBlur={() => {
+              // 失焦时若为合法值则规范化为 1 位小数
+              if (manualStart != null) setStartDraft(String(manualStart))
+            }}
             placeholder="如 72.5"
             style={{ flex: 1, fontSize: 20, fontWeight: 700, textAlign: 'center' }}
             aria-label="起始体重"
@@ -164,7 +183,11 @@ export default function Plan() {
         </div>
         <div className="field-hint" style={{ marginTop: 6 }}>
           建议用晨起空腹体重；修改后将同步为当日体重记录
-          {startDraft !== '' && (manualStart == null || manualStart < 30 || manualStart > 300) ? <span className="field-error">（请输入 30~300 之间的数值）</span> : null}
+          {startDraft.trim() === '' ? (
+            <span className="field-error">（请填写起始体重）</span>
+          ) : startInvalid ? (
+            <span className="field-error">（请输入 30~300 之间的数值）</span>
+          ) : null}
         </div>
       </div>
 
@@ -183,12 +206,11 @@ export default function Plan() {
               type="number"
               inputMode="decimal"
               step="0.1"
-              min={30}
-              max={200}
-              value={goalWeight}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                if (isFinite(n) && n >= 30 && n <= 200) setGoalWeight(Math.round(n * 10) / 10)
+              value={goalDraft}
+              onChange={(e) => setGoalDraft(e.target.value)}
+              onBlur={commitGoalDraft}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
               }}
               style={{ width: 86, fontSize: 30, fontWeight: 800, textAlign: 'center', border: 'none', borderBottom: '2px dashed var(--c-line-strong)', background: 'transparent', color: 'var(--c-ink)', outline: 'none', fontFamily: 'var(--font-num)' }}
               aria-label="目标体重直接输入"
