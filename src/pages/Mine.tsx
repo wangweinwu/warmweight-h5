@@ -287,7 +287,10 @@ export default function Mine() {
           </div>
         </div>
         <div className="field">
-          <label className="field-label">服务器地址（WebDAV 根目录）</label>
+          <label className="field-label">
+            服务器地址（WebDAV 根目录）
+            {davCfg.fromEnv && davCfg.url ? <span className="badge badge-caramel" style={{ marginLeft: 6 }}>部署变量预设</span> : null}
+          </label>
           <input className="field-input" value={davCfg.url} onChange={(e) => setDavCfg((c) => ({ ...c, url: e.target.value }))} placeholder="如 https://dav.jianguoyun.com/dav/" />
         </div>
         <div className="field">

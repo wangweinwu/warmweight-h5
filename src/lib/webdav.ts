@@ -7,6 +7,8 @@
 
 export interface WebdavConfig {
   enabled: boolean
+  /** url 来自部署环境变量（UI 中提示由部署设定，仍可本地覆盖） */
+  fromEnv?: boolean
   /** 服务器根地址，如 https://dav.jianguoyun.com/dav/ */
   url: string
   username: string
@@ -20,14 +22,23 @@ export interface WebdavConfig {
   proxyUrl?: string
 }
 
+/**
+ * 默认配置：优先读构建时环境变量（部署时设定），用户在应用内修改后覆盖（存本地）
+ * 支持的变量：
+ *   VITE_WEBDAV_URL / VITE_WEBDAV_USERNAME / VITE_WEBDAV_PASSWORD
+ *   VITE_WEBDAV_DIR / VITE_WEBDAV_ENABLED / VITE_WEBDAV_MODE(proxy|direct)
+ */
 export function defaultWebdavConfig(): WebdavConfig {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}
+  const mode = (env.VITE_WEBDAV_MODE ?? 'proxy').toLowerCase()
   return {
-    enabled: false,
-    url: '',
-    username: '',
-    password: '',
-    dir: 'warmweight',
-    useProxy: typeof location !== 'undefined' && location.protocol === 'https:'
+    enabled: env.VITE_WEBDAV_ENABLED === '1' || env.VITE_WEBDAV_ENABLED === 'true',
+    url: env.VITE_WEBDAV_URL ?? '',
+    username: env.VITE_WEBDAV_USERNAME ?? '',
+    password: env.VITE_WEBDAV_PASSWORD ?? '',
+    dir: env.VITE_WEBDAV_DIR ?? 'warmweight',
+    useProxy: mode !== 'direct',
+    fromEnv: Boolean(env.VITE_WEBDAV_URL)
   }
 }
 
