@@ -73,6 +73,23 @@ weight-h5/
 └── docs/API.md                 # 云同步接口协议（含 Node 参考实现）
 ```
 
+## WebDAV 云备份（可选）
+
+用户可在应用「我的 → WebDAV 云备份」配置自己的坚果云 / Nextcloud / Alist / NAS（详见 `docs/WEBDAV.md`）。
+部署者也可以通过**构建时环境变量**为所有用户预设默认值：
+
+| 变量 | 说明 | 默认 |
+|---|---|---|
+| `VITE_WEBDAV_URL` | WebDAV 服务器根地址 | 空（用户自填） |
+| `VITE_WEBDAV_USERNAME` | WebDAV 账号 | 空 |
+| `VITE_WEBDAV_PASSWORD` | WebDAV 密码（应用密码；打包进前端即视为公开） | 空 |
+| `VITE_WEBDAV_DIR` | 远端目录 | `warmweight` |
+| `VITE_WEBDAV_ENABLED` | 默认开启自动备份 | `false` |
+| `VITE_WEBDAV_MODE` | `proxy`（默认）/ `direct` | `proxy` |
+
+在 Vercel：项目 Settings → Environment Variables 里添加后重新部署即可；本地开发复制 `.env.example` 为 `.env.local`。
+用户在应用内修改后会保存在其浏览器本地，优先于部署预设。
+
 ## 数据与离线策略
 
 1. **写入路径**：任何修改先写 localStorage（同步 <10ms），再异步触发云同步——离线功能 100% 可用
