@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import { lsGet, lsSet, lsRemove, onStorageChange, getDeviceId, getDeviceName } from '@/lib/storage'
 import { syncNow } from '@/lib/sync'
 import { hashPassword } from '@/lib/crypto'
+import { scheduleWebdavPush, tryPullOnLogin } from '@/lib/webdavSync'
 import { uid, todayStr } from '@/lib/format'
 import type { User, Plan, WeightEntry, PhotoEntry, SyncLog } from '@/lib/types'
 
@@ -129,6 +130,21 @@ export const useApp = create<AppState>((set, get) => {
     if ('photos' in patch) lsSet('photos', patch.photos)
   }
 
+  /** WebDAV 自动备份：数据变更后防抖上传 */
+  function webdavBackup() {
+    const me = cur()
+    if (!me) return
+    scheduleWebdavPush(me.id, () => ({
+      userId: me.id,
+      savedAt: new Date().toISOString(),
+      deviceId: getDeviceId(),
+      user: pickProfile(cur()),
+      plan: get().plan,
+      weights: get().weights,
+      photos: get().photos
+    }))
+  }
+
   return {
     ...init,
 
@@ -157,6 +173,8 @@ export const useApp = create<AppState>((set, get) => {
       set({ users: newUsers, currentUserId: user.id, plan: null, weights: [], photos: [], lastSyncAt: null })
       // 注册后自动首推
       void get().sync(true)
+      webdavBackup()
+      // WebDAV 有旧设备备份时不覆盖（新账号一般云端为空）
     },
 
     login: async (email, password) => {
@@ -169,6 +187,18 @@ export const useApp = create<AppState>((set, get) => {
       lsSet('userProfile', pickProfile(user))
       set({ currentUserId: user.id, plan: lsGet('plan', null), weights: lsGet('weights', []), photos: lsGet('photos', []) })
       void get().sync(true)
+      // 登录时若 WebDAV 云端备份比本地新 → 自动恢复
+      void tryPullOnLogin(user.id, get().lastSyncAt).then((res) => {
+        if (res.pulled && res.snapshot) {
+          const snap = res.snapshot
+          const patch: Partial<AppState> = {}
+          if (snap.plan !== undefined) { lsSet('plan', snap.plan); patch.plan = snap.plan }
+          if (snap.weights) { lsSet('weights', snap.weights); patch.weights = snap.weights }
+          if (snap.photos) { lsSet('photos', snap.photos); patch.photos = snap.photos }
+          set(patch)
+          get().toast('已从 WebDAV 恢复云端备份', 'ok')
+        }
+      })
     },
 
     logout: () => {
@@ -202,6 +232,7 @@ export const useApp = create<AppState>((set, get) => {
       touchUser(patch)
       lsSet('userProfile', pickProfile({ ...cur()!, ...patch }))
       void get().sync(true)
+      webdavBackup()
     },
 
     /* ============ 计划与记录 ============ */
@@ -210,12 +241,14 @@ export const useApp = create<AppState>((set, get) => {
       persistBiz({ plan: stamped })
       set({ plan: stamped })
       void get().sync(true)
+      webdavBackup()
     },
 
     clearPlan: () => {
       persistBiz({ plan: null })
       set({ plan: null })
       void get().sync(true)
+      webdavBackup()
     },
 
     upsertWeight: async (date, weight, note) => {
@@ -228,6 +261,7 @@ export const useApp = create<AppState>((set, get) => {
       persistBiz({ weights: list })
       set({ weights: list })
       void get().sync(true)
+      webdavBackup()
     },
 
     removeWeight: async (date) => {
@@ -235,6 +269,7 @@ export const useApp = create<AppState>((set, get) => {
       persistBiz({ weights: list })
       set({ weights: list })
       void get().sync(true)
+      webdavBackup()
     },
 
     addPhoto: async (photo) => {
@@ -242,6 +277,7 @@ export const useApp = create<AppState>((set, get) => {
       persistBiz({ photos: list })
       set({ photos: list })
       void get().sync(true)
+      webdavBackup()
     },
 
     removePhoto: async (id) => {
@@ -249,6 +285,7 @@ export const useApp = create<AppState>((set, get) => {
       persistBiz({ photos: list })
       set({ photos: list })
       void get().sync(true)
+      webdavBackup()
     },
 
     /* ============ 同步（队列化：进行中的同步只合并请求，完成后用最新状态再跑一轮） ============ */

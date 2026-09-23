@@ -22,6 +22,13 @@ export default function Shell() {
   const online = useApp((s) => s.online)
   const [fabOpen, setFabOpen] = useState(false)
 
+  /* 其他页面（首页空态等）通过事件打开全局记录 Sheet */
+  useEffect(() => {
+    const open = () => setFabOpen(true)
+    window.addEventListener('ww:open-quick', open)
+    return () => window.removeEventListener('ww:open-quick', open)
+  }, [])
+
   /* 离线/恢复自动同步 */
   const setOnline = useApp((s) => s.setOnline)
   useEffect(() => {

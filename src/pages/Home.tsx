@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react'
 import { useApp } from '@/store/useApp'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Ring, Progress, Empty } from '@/components/ui'
-import { QuickWeightSheet } from '@/components/QuickWeightSheet'
 import { WeightChart } from '@/components/WeightChart'
 import { ThemeToggle } from '@/components/Widgets'
 import { IconScale, IconTarget, IconChevron, IconCloud, IconSync, IconPlus } from '@/components/icons'
@@ -14,7 +13,6 @@ export default function Home() {
   const nav = useNavigate()
   const { plan, weights, online, syncing, sync } = useApp()
   const me = useApp((s) => s.me())
-  const [quickOpen, setQuickOpen] = useState(false)
 
   if (!me) return <Navigate to="/auth" replace />
 
@@ -106,7 +104,7 @@ export default function Home() {
             <button
               className="btn btn-sm"
               style={{ background: 'rgba(255,255,255,.22)', color: '#fff', backdropFilter: 'blur(4px)' }}
-              onClick={() => setQuickOpen(true)}
+              onClick={() => window.dispatchEvent(new CustomEvent('ww:open-quick'))}
             >
               <IconPlus width={15} height={15} />
               {todayEntry ? '更新今日' : '记一笔'}
@@ -185,7 +183,7 @@ export default function Home() {
             title={sorted.length === 1 ? '再记录 1 次就能看到曲线' : '记录两次体重后开启曲线'}
             desc="连续记录是看见变化的第一步"
           >
-            <button className="btn btn-ghost" onClick={() => setQuickOpen(true)}>
+            <button className="btn btn-ghost" onClick={() => window.dispatchEvent(new CustomEvent('ww:open-quick'))}>
               立即记录
             </button>
           </Empty>
@@ -202,8 +200,6 @@ export default function Home() {
           <IconChevron width={15} height={15} style={{ color: 'var(--c-ink-3)' }} />
         </div>
       ) : null}
-
-      <QuickWeightSheet open={quickOpen} onClose={() => setQuickOpen(false)} />
     </div>
   )
 }

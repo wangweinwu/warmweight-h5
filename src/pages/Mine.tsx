@@ -10,6 +10,9 @@ import { fmtDateTime } from '@/lib/format'
 import { getDeviceId, getDeviceName } from '@/lib/storage'
 import { CLOUD_API_BASE } from '@/lib/sync'
 import { calcBmi, bmiLevel, healthyRange } from '@/lib/bmi'
+import { getWebdavConfig, saveWebdavConfig, doPush, tryPullOnLogin, getLastPush } from '@/lib/webdavSync'
+import { wdTest } from '@/lib/webdav'
+import type { WebdavConfig } from '@/lib/webdav'
 import type { Gender } from '@/lib/types'
 
 export default function Mine() {
@@ -28,6 +31,12 @@ export default function Mine() {
   const [newPw2, setNewPw2] = useState('')
   const [confirmLogout, setConfirmLogout] = useState(false)
   const [exportData, setExportData] = useState<string | null>(null)
+  const [davOpen, setDavOpen] = useState(false)
+  const [davCfg, setDavCfg] = useState<WebdavConfig>(() => getWebdavConfig())
+  const [davTesting, setDavTesting] = useState(false)
+  const [davMsg, setDavMsg] = useState('')
+  const [davBusy, setDavBusy] = useState('')
+  const lastPush = getLastPush()
 
   if (!me) return <Navigate to="/auth" replace />
 
@@ -191,6 +200,18 @@ export default function Mine() {
           </div>
           <span className="cell-extra">›</span>
         </div>
+        <div className="cell" onClick={() => { setDavCfg(getWebdavConfig()); setDavMsg(''); setDavOpen(true) }}>
+          <IconArchive width={20} height={20} style={{ color: 'var(--c-caramel)' }} />
+          <div className="cell-body">
+            <div className="cell-title">WebDAV 云备份 {davCfg.enabled ? <span className="badge badge-ok">已开启</span> : <span className="badge badge-caramel">未开启</span>}</div>
+            <div className="cell-desc">
+              {davCfg.enabled && lastPush?.at
+                ? `上次${lastPush.ok ? '备份' : '备份失败'} ${fmtDateTime(lastPush.at)}${lastPush.detail ? ' · ' + lastPush.detail : ''}`
+                : '坚果云 / Nextcloud / Alist 等任意 WebDAV'}
+            </div>
+          </div>
+          <span className="cell-extra">›</span>
+        </div>
         <div className="cell" onClick={doExport}>
           <IconArchive width={20} height={20} style={{ color: 'var(--c-info)' }} />
           <div className="cell-body">
@@ -251,6 +272,111 @@ export default function Mine() {
           <input className="field-input" type="password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} autoComplete="new-password" />
         </div>
         <button className="btn btn-primary btn-block" disabled={!oldPw || !newPw || !newPw2} onClick={submitPw}>确认修改</button>
+      </Sheet>
+
+      {/* WebDAV 设置 Sheet */}
+      <Sheet open={davOpen} onClose={() => setDavOpen(false)} title="WebDAV 云备份">
+        <div className="field-hint" style={{ marginBottom: 12 }}>
+          数据变更后约 8 秒自动备份整包快照（含账号资料、计划、体重、照片）；换手机登录同账号可一键恢复。
+        </div>
+        <div className="field">
+          <label className="field-label">自动备份</label>
+          <div className="chip-row">
+            <button className="chip" data-active={davCfg.enabled} onClick={() => setDavCfg((c) => ({ ...c, enabled: true }))}>开启</button>
+            <button className="chip" data-active={!davCfg.enabled} onClick={() => setDavCfg((c) => ({ ...c, enabled: false }))}>关闭</button>
+          </div>
+        </div>
+        <div className="field">
+          <label className="field-label">服务器地址（WebDAV 根目录）</label>
+          <input className="field-input" value={davCfg.url} onChange={(e) => setDavCfg((c) => ({ ...c, url: e.target.value }))} placeholder="如 https://dav.jianguoyun.com/dav/" />
+        </div>
+        <div className="field">
+          <label className="field-label">账号</label>
+          <input className="field-input" value={davCfg.username} onChange={(e) => setDavCfg((c) => ({ ...c, username: e.target.value }))} placeholder="WebDAV 账号" />
+        </div>
+        <div className="field">
+          <label className="field-label">密码 / 应用密码</label>
+          <input className="field-input" type="password" value={davCfg.password} onChange={(e) => setDavCfg((c) => ({ ...c, password: e.target.value }))} placeholder="坚果云等请用「应用密码」" />
+        </div>
+        <div className="field">
+          <label className="field-label">远端目录</label>
+          <input className="field-input" value={davCfg.dir} onChange={(e) => setDavCfg((c) => ({ ...c, dir: e.target.value }))} placeholder="warmweight" />
+        </div>
+        <div className="field">
+          <label className="field-label">连接方式</label>
+          <div className="chip-row">
+            <button className="chip" data-active={!davCfg.useProxy} onClick={() => setDavCfg((c) => ({ ...c, useProxy: false }))}>直连</button>
+            <button className="chip" data-active={davCfg.useProxy} onClick={() => setDavCfg((c) => ({ ...c, useProxy: true }))}>经本站代理（推荐）</button>
+          </div>
+          <div className="field-hint">直连要求 WebDAV 服务器开放跨域(CORS)；不开时选代理（Vercel 部署自带）</div>
+        </div>
+        {davMsg ? (
+          <div style={{ fontSize: 13, marginBottom: 12, color: davMsg.includes('成功') ? 'var(--c-ok)' : 'var(--c-danger)' }}>{davMsg}</div>
+        ) : null}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <button
+            className="btn btn-outline"
+            style={{ flex: 1 }}
+            disabled={davTesting || !davCfg.url}
+            onClick={async () => {
+              setDavTesting(true)
+              setDavMsg('测试中…')
+              const r = await wdTest(davCfg)
+              setDavMsg(r.message)
+              setDavTesting(false)
+            }}
+          >
+            {davTesting ? '测试中…' : '测试连接'}
+          </button>
+          <button
+            className="btn btn-primary"
+            style={{ flex: 1 }}
+            disabled={davBusy !== '' || !davCfg.url}
+            onClick={async () => {
+              saveWebdavConfig(davCfg)
+              setDavBusy('push')
+              const r = await doPush(me!.id, () => ({
+                userId: me!.id,
+                savedAt: new Date().toISOString(),
+                deviceId: getDeviceId(),
+                user: me!,
+                plan,
+                weights,
+                photos
+              }))
+              setDavMsg(r.message)
+              setDavBusy('')
+            }}
+          >
+            {davBusy === 'push' ? '备份中…' : '立即备份'}
+          </button>
+        </div>
+        <button
+          className="btn btn-ghost btn-block"
+          disabled={davBusy !== '' || !davCfg.url}
+          onClick={async () => {
+            saveWebdavConfig(davCfg)
+            setDavBusy('pull')
+            const r = await tryPullOnLogin(me!.id, null) // force 模式：与本地比较交给用户判断
+            if (r.snapshot) {
+              const snap = r.snapshot
+              const patch: Partial<Parameters<typeof useApp.setState>[0]> = {}
+              if (snap.plan !== undefined) { useApp.setState({ plan: snap.plan }); localStorage.setItem('ww.plan', JSON.stringify(snap.plan)) }
+              if (snap.weights) { useApp.setState({ weights: snap.weights }); localStorage.setItem('ww.weights', JSON.stringify(snap.weights)) }
+              if (snap.photos) { useApp.setState({ photos: snap.photos }); localStorage.setItem('ww.photos', JSON.stringify(snap.photos)) }
+              void patch
+              setDavMsg('已恢复：' + r.message)
+            } else {
+              setDavMsg(r.message)
+            }
+            setDavBusy('')
+          }}
+        >
+          {davBusy === 'pull' ? '恢复中…' : '从云端恢复（覆盖本机）'}
+        </button>
+        <div className="field-hint" style={{ marginTop: 10 }}>
+          恢复会用云端备份覆盖本机数据，建议先「立即备份」本机再尝试恢复。
+        </div>
       </Sheet>
 
       {/* 导出数据 */}
