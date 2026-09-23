@@ -22,5 +22,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/**/*.cjs": {
+      "runtime": "@vercel/node@3"
+    }
+  }
 }
