@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宠物精灵 · PetMon</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #141c14; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #topbar { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: #0d130d; color: #cfe6c9; font-size: 14px; }
+  #topbar b { color: #ffd76a; }
+  #wrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+  canvas { max-width: 100%; max-height: 100%; background: #000; border-radius: 6px; box-shadow: 0 6px 40px rgba(0,0,0,.6); image-rendering: auto; }
+  #mobile-pad { display: none; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); gap: 6px; padding: 10px; background: #0d130d; }
+  #mobile-pad button { border: none; border-radius: 10px; background: #22301f; color: #cfe6c9; font-size: 22px; }
+  #mobile-pad button:active { background: #3c5a34; }
+  @media (pointer: coarse) { #mobile-pad { display: grid; } }
+  @media (max-width: 900px) { #wrap { padding: 0; } canvas { border-radius: 0; } }
+
+  /* ---------- 面板 ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(8, 12, 8, .72); display: flex; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(3px); }
+  .panel { width: min(860px, 94vw); max-height: 88vh; overflow: auto; background: #f8f7f0; border-radius: 14px; border: 3px solid #4a5568; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 2px solid #d8d2c2; position: sticky; top: 0; background: #f8f7f0; z-index: 2; }
+  .panel-head h2 { font-size: 20px; color: #2d3748; }
+  .close-btn { border: 2px solid #b9b2a4; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; color: #555; }
+  .close-btn:hover { background: #ffe9e9; border-color: #e04b3a; color: #e04b3a; }
+  .panel-body { padding: 18px 20px; }
+
+  .hint { color: #7a7466; font-size: 13px; margin: 12px 0; }
+  .flavor { color: #6b7a52; font-style: italic; font-size: 13px; margin: 8px 0; }
+  .small { font-size: 12px; color: #888; }
+
+  /* 队伍卡片 */
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+  .mon-card { display: flex; gap: 12px; background: #fff; border: 2px solid #d8d2c2; border-radius: 12px; padding: 10px; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+  .mon-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+  .mon-card.fainted { opacity: .55; background: #f3ecec; }
+  .mon-card img { width: 92px; height: 92px; border-radius: 10px; object-fit: cover; background: #eef3e6; }
+  .mon-name { font-weight: 700; color: #2d3748; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .st { color: #a26bf2; font-weight: 700; font-size: 12px; }
+  .type-badge { color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .bar { height: 10px; background: #dcd6c6; border-radius: 5px; overflow: hidden; margin: 6px 0 3px; }
+  .bar-fill { height: 100%; transition: width .4s; }
+  .bar-fill.g { background: #4cd964; } .bar-fill.y { background: #ffc107; } .bar-fill.r { background: #ff5252; }
+  .skills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .skill-chip { font-size: 11px; border: 1.6px solid; border-radius: 6px; padding: 2px 8px; color: #444; background: #fbfaf5; }
+  .learn-tip { color: #c07a00; font-size: 12px; margin-top: 6px; font-weight: 700; }
+
+  /* 详情 */
+  .detail-wrap { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .detail-img { width: 190px; height: 190px; object-fit: cover; border-radius: 12px; border: 2px solid #d8d2c2; }
+  table.stats, table.learn, table.bag-table { border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; font-size: 14px; }
+  table.stats th, table.learn th, table.bag-table th { background: #e9e5d8; color: #555; }
+  table.stats td, table.stats th, table.learn td, table.learn th, table.bag-table td, table.bag-table th { padding: 6px 14px; border-bottom: 1px solid #eee7d8; text-align: left; }
+  table.learn tr.known td { color: #2f7d32; } table.learn tr.missed td { color: #999; } table.learn tr.future td { color: #555; }
+  .replace-box { margin-top: 14px; background: #fff7e0; border: 2px dashed #e0a800; border-radius: 10px; padding: 12px 16px; }
+  .replace-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .replace-btns button { background: #fff; border: 2px solid #e0a800; color: #7a5c00; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+  .replace-btns button:hover { background: #ffe9b8; }
+
+  /* 背包/商店 */
+  .bag-table { width: 100%; }
+  .buy-btn { background: #3d9be9; color: #fff; border: none; padding: 7px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+  .buy-btn:hover { background: #2f7fd6; }
+  .bag-table select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
+
+  /* 图鉴 */
+  .dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .dex-card { background: #fff; border: 2px solid #d8d2c2; border-radius: 10px; padding: 10px; text-align: center; }
+  .dex-card.unseen { opacity: .6; }
+  .dex-card .dex-img img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; }
+  .dex-name { font-weight: 700; margin: 6px 0 4px; color: #2d3748; }
+  .dex-no { color: #aaa; font-size: 11px; margin-top: 4px; }
+
+  /* 御三家 */
+  .starter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .starter-card { background: #fff; border: 3px solid #d8d2c2; border-radius: 14px; padding: 16px; text-align: center; cursor: pointer; transition: transform .15s, border-color .15s; }
+  .starter-card:hover { transform: translateY(-4px); border-color: #e0a800; }
+  .starter-card img { width: 100%; max-width: 190px; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
+  .starter-card h3 { margin: 10px 0 6px; color: #2d3748; }
+
+  /* 道馆 */
+  .gym-intro p { margin: 8px 0; color: #444; }
+  .gym-btn { margin-top: 12px; background: linear-gradient(135deg, #e04b3a, #c4392b); color: #fff; border: none; padding: 12px 30px; font-size: 17px; border-radius: 10px; cursor: pointer; font-weight: 800; }
+  .gym-btn:hover { filter: brightness(1.1); }
+
+  /* toast */
+  #toast { position: fixed; left: 50%; top: 76px; transform: translateX(-50%) translateY(-16px); background: rgba(20, 26, 34, .92); color: #fff; padding: 10px 22px; border-radius: 999px; font-size: 14px; opacity: 0; transition: all .3s; z-index: 99; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span>🌱 <b>宠物精灵 PetMon</b> · 仿宝可梦玩法 · 纯前端单机</span>
+  <span id="save-state">存档:自动(本地) · <button onclick="wipeSave()" style="border:none;background:#3a2a1a;color:#ffd76a;border-radius:6px;padding:3px 10px;cursor:pointer">清除存档重开</button></span>
+</div>
+<div id="wrap"><canvas id="game-canvas" width="960" height="640"></canvas></div>
+<div id="mobile-pad" style="grid-template-rows:repeat(3,56px)">
+  <button style="grid-column:2;grid-row:1" data-k="ArrowUp">▲</button>
+  <button style="grid-column:1;grid-row:2" data-k="ArrowLeft">◀</button>
+  <button style="grid-column:2;grid-row:2" data-k="E">E</button>
+  <button style="grid-column:3;grid-row:2" data-k="ArrowRight">▶</button>
+  <button style="grid-column:2;grid-row:3" data-k="ArrowDown">▼</button>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
